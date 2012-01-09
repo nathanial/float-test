@@ -5,10 +5,28 @@
 #include <vector>
 #include <algorithm>
 
+#define EIGHT_BIT
+
+#ifdef THIRTY_TWO_BIT
+#define TOTAL_BITS 32
+#define EXPONENT_BITS 8
+#define SIGNIFICAND_BITS 23
+#define EXPONENT_BIAS 127
+#endif
+
+#ifdef EIGHT_BIT
+#define TOTAL_BITS 8
+#define EXPONENT_BITS 3
+#define SIGNIFICAND_BITS 4
+#define EXPONENT_BIAS 3
+#endif
+
 enum bit {
 	zero,
 	one
 };
+
+typedef char byte;
 
 struct FloatParts {
 	bit sign;
@@ -16,9 +34,12 @@ struct FloatParts {
 	std::vector<bit> fraction;
 };
 
-static std::vector<bit> to_bits(float f);
-static bit to_bit(int index, float value);
-static FloatParts to_float_parts(float value);
+static std::vector<bit> float_to_bits(float f);
+static std::vector<bit> byte_to_bits(byte b);
+
+static bit float_to_bit(int index, float value);
+static bit byte_to_bit(int index, byte value);
+static FloatParts to_float_parts(std::vector<bit> bits);
 static int bits_to_int(int start, int length, std::vector<bit> bits);
 static int bits_to_int(std::vector<bit> bits);
 static void print_float_bits(std::vector<bit> bits);
@@ -26,10 +47,29 @@ static float float_from_parts(FloatParts parts);
 static int bit_at(int frac, int i);
 static std::vector<bit> bit_subarray(std::vector<bit>& src, int i, int len);
 
+static void enumerate();
+static void test_float();
+
 int _tmain(int argc, _TCHAR* argv[]){
-	auto val = 0.7;
-	auto bits = to_bits(val);
-	auto parts = to_float_parts(val);
+	enumerate();
+	return 0;
+}
+
+void enumerate(){
+	for(int i = 0; i < 255; i++){
+		FloatParts parts = to_float_parts(byte_to_bits((byte)i));
+		printf("%d, ", (int)i);
+		printf("%d, ", parts.sign);
+		printf("%d, ", bits_to_int(parts.exponent));
+		printf("%d, ", bits_to_int(parts.fraction));
+		printf("%f\n", float_from_parts(parts));
+	}
+}
+
+void test_float(){
+	auto val = 0.1526;
+	auto bits = float_to_bits(val);
+	auto parts = to_float_parts(float_to_bits(val));
 
 	printf("val = %f\n", val);
 	printf("sign = %d\n", parts.sign);
@@ -38,32 +78,46 @@ int _tmain(int argc, _TCHAR* argv[]){
 	printf("calculated = %f\n", float_from_parts(parts));
 
 	print_float_bits(bits);
-
-	return 0;
 }
 
-std::vector<bit> to_bits(float f){
+std::vector<bit> float_to_bits(float f){
 	std::vector<bit> bits; 
-	for(int i = 0; i < 32; i++){
-		bits.push_back(to_bit(i, f));
+	for(int i = 0; i < TOTAL_BITS; i++){
+		bits.push_back(float_to_bit(i, f));
 	}
 	std::reverse(bits.begin(), bits.end());
 	return bits;
 }
 
-bit to_bit(int index, float value){
+std::vector<bit> byte_to_bits(byte b){
+	std::vector<bit> bits;
+	for(int i = 0; i < 8; i++){
+		bits.push_back(byte_to_bit(i, b));
+	}
+	std::reverse(bits.begin(), bits.end());
+	return bits;
+}
+
+bit float_to_bit(int index, float value){
 	int ival = *((int *)(void *)&value);
 	int bval = (ival >> index) & 0x01;
 	if(bval) return one;
 	return zero;
 }
 
-FloatParts to_float_parts(float value){
+bit byte_to_bit(int index, byte value){
+	int ival = *((int *)(void *)&value);
+	int bval = (ival >> index) & 0x01;
+	if(bval) return one;
+	return zero;
+}
+
+
+FloatParts to_float_parts(std::vector<bit> bits){
 	FloatParts parts;
-	auto bits = to_bits(value);
 	parts.sign = bits[0];
-	parts.exponent = bit_subarray(bits, 1, 8);
-	parts.fraction = bit_subarray(bits, 9, 23);
+	parts.exponent = bit_subarray(bits, 1, EXPONENT_BITS);
+	parts.fraction = bit_subarray(bits, EXPONENT_BITS+1, SIGNIFICAND_BITS);
 	return parts;
 }
 
@@ -90,7 +144,7 @@ int bits_to_int(std::vector<bit> bits){
 }
 
 void print_float_bits(std::vector<bit> bits){
-	for(int i = 0; i < 32; i++){
+	for(int i = 0; i < TOTAL_BITS; i++){
 		bit b = bits.at(i);
 		putchar(b == zero ? '0' : '1');
 		if(i == 0){
@@ -104,14 +158,14 @@ void print_float_bits(std::vector<bit> bits){
 
 float float_from_parts(FloatParts parts){
 	int sign = parts.sign > 0 ? -1 : 1;
-	int e = bits_to_int(parts.exponent) - 127;
+	int e = bits_to_int(parts.exponent) - EXPONENT_BIAS;
 	double exp = pow((double)2.0, (double)e);
 	double frac = 0;
-	int fraci = bits_to_int(parts.fraction);
 	frac += 1;
-	for(int i = 0; i < 23; i++){
-		int x = bit_at(fraci, i + 9);
-		frac += x * pow(2.0, -i);
+	for(int i = 0; i < SIGNIFICAND_BITS; i++){
+		if(parts.fraction.at(i) == one){
+			frac += pow(2.0, -(i + 1));
+		}
 	}
 	return sign * frac * exp;
 }
