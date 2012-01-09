@@ -18,7 +18,7 @@
 #define TOTAL_BITS 8
 #define EXPONENT_BITS 3
 #define SIGNIFICAND_BITS 4
-#define EXPONENT_BIAS 3
+#define EXPONENT_BIAS 4
 #endif
 
 enum bit {
@@ -67,7 +67,7 @@ void enumerate(){
 }
 
 void test_float(){
-	auto val = 0.1526;
+	auto val = 0.0;
 	auto bits = float_to_bits(val);
 	auto parts = to_float_parts(float_to_bits(val));
 
@@ -157,15 +157,23 @@ void print_float_bits(std::vector<bit> bits){
 }
 
 float float_from_parts(FloatParts parts){
+	bool isZero = true;
 	int sign = parts.sign > 0 ? -1 : 1;
 	int e = bits_to_int(parts.exponent) - EXPONENT_BIAS;
+	if(e != 0){
+		isZero = false;
+	}
 	double exp = pow((double)2.0, (double)e);
 	double frac = 0;
 	frac += 1;
 	for(int i = 0; i < SIGNIFICAND_BITS; i++){
 		if(parts.fraction.at(i) == one){
 			frac += pow(2.0, -(i + 1));
+			isZero = false;
 		}
+	}
+	if(isZero){
+		return 0;
 	}
 	return sign * frac * exp;
 }
